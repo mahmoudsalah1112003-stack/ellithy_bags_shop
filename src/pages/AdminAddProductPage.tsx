@@ -5,20 +5,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-// ✅ تعريف نوع المنتج
-interface Product {
-  id?: string;
+// ===== النوع الداخلي بدلاً من استيراد خارجي =====
+type ProductInsert = {
   name: string;
   price: number;
-  discount_price?: number;
-  image_url?: string;
-  description?: string;
+  discount_price?: number | null;
+  image_url?: string | null;
+  description?: string | null;
   category: string;
-  sub_category?: string;
-  is_offer: boolean; // Boolean حقيقي
-}
+  sub_category?: string | null;
+  is_offer: boolean;
+};
 
-// ✅ إعداد الأقسام والفئات الفرعية
+// الأقسام والفئات الفرعية
 const categoryOptions: Record<string, { title: string; subs?: string[] }> = {
   "mens-bags": { title: "Men's Bags", subs: ["Backpacks", "Handbags", "Crossbody Bags"] },
   "womens-bags": { title: "Women's Bags", subs: ["Backpacks", "Shoulder Bags"] },
@@ -27,7 +26,7 @@ const categoryOptions: Record<string, { title: string; subs?: string[] }> = {
 };
 
 export default function AdminAddProductPage() {
-  const [form, setForm] = useState<Product>({
+  const [form, setForm] = useState<ProductInsert>({
     name: "",
     price: 0,
     discount_price: 0,
@@ -35,17 +34,17 @@ export default function AdminAddProductPage() {
     description: "",
     category: "mens-bags",
     sub_category: "",
-    is_offer: false, // Boolean
+    is_offer: false,
   });
 
   const [subOptions, setSubOptions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ تحديث الفئات الفرعية عند تغيير القسم
+  // تحديث الفئات الفرعية عند تغيير القسم
   useEffect(() => {
     const subs = categoryOptions[form.category]?.subs || [];
     setSubOptions(subs);
-    setForm(f => ({ ...f, sub_category: subs[0] || "" })); // اختر أول فئة افتراضيًا
+    setForm(f => ({ ...f, sub_category: subs[0] || "" }));
   }, [form.category]);
 
   const handleAddProduct = async () => {
@@ -56,36 +55,41 @@ export default function AdminAddProductPage() {
 
     setSubmitting(true);
 
-    const payload: Product = {
-      ...form,
-      price: Number(form.price),
-      discount_price: Number(form.discount_price),
-      // is_offer already Boolean → لا تحويل
-    };
+    try {
+      const payload: ProductInsert = {
+        ...form,
+        price: Number(form.price),
+        discount_price: Number(form.discount_price),
+        is_offer: form.is_offer,
+      };
 
-    const { data, error } = await supabase
-      .from<Product>("products") // Generic Type متوافق
-      .insert([payload])
-      .select()
-      .single();
+      // ✅ الطريقة الصحيحة بدون Type Argument في .from()
+      const { data, error } = await supabase
+        .from("products")
+        .insert([payload] as ProductInsert[]) // نفرض النوع هنا على الفورم
+        .select()
+        .single();
 
-    setSubmitting(false);
+      if (error) throw error;
 
-    if (error) {
-      console.log(error);
-      toast.error(error.message);
-    } else {
-      toast.success("Product added!");
+      toast.success("Product added successfully!");
+
+      // إعادة تعيين الفورم
       setForm({
         name: "",
         price: 0,
         discount_price: 0,
         image_url: "",
         description: "",
-        category: form.category, // احتفظ بالقسم الحالي
+        category: form.category,
         sub_category: subOptions[0] || "",
         is_offer: false,
       });
+    } catch (err: any) {
+      console.log(err);
+      toast.error(err.message || "Failed to add product");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -97,14 +101,12 @@ export default function AdminAddProductPage() {
           <Label>Name</Label>
           <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
         </div>
+
         <div>
           <Label>Price</Label>
-          <Input
-            type="number"
-            value={form.price}
-            onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))}
-          />
+          <Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))} />
         </div>
+
         <div>
           <Label>Discount Price</Label>
           <Input
@@ -113,10 +115,12 @@ export default function AdminAddProductPage() {
             onChange={e => setForm(f => ({ ...f, discount_price: Number(e.target.value) }))}
           />
         </div>
+
         <div>
           <Label>Image URL</Label>
           <Input value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} />
         </div>
+
         <div>
           <Label>Description</Label>
           <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
@@ -138,7 +142,7 @@ export default function AdminAddProductPage() {
           </select>
         </div>
 
-        {/* Dropdown للفئات الفرعية */}
+        {/* Dropdown للفئة الفرعية */}
         {subOptions.length > 0 && (
           <div>
             <Label>Sub Category</Label>
